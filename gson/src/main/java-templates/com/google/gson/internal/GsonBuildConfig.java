@@ -17,8 +17,9 @@
 package com.google.gson.internal;
 
 /**
- * Build configuration for Gson. This file is automatically populated by
- * templating-maven-plugin and .java/.class files are generated for use in Gson.
+ * 执行templating-maven-plugin插件，将GsonBuildConfig添加到源码路径下
+ *
+ * 构建Gson的配置。该文件由templating-maven-plugin自动填充，并生成.java/.class文件供在Gson中使用。
  *
  * @author Inderjeet Singh
  */
