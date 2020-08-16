@@ -96,8 +96,7 @@ public final class Gson {
      * lookup would stack overflow. We cheat by returning a proxy type adapter.
      * The proxy is wired up once the initial adapter has been created.
      */
-    private final ThreadLocal<Map<TypeToken<?>, FutureTypeAdapter<?>>> calls
-            = new ThreadLocal<Map<TypeToken<?>, FutureTypeAdapter<?>>>();
+    private final ThreadLocal<Map<TypeToken<?>, FutureTypeAdapter<?>>> calls = new ThreadLocal<Map<TypeToken<?>, FutureTypeAdapter<?>>>();
 
     private final Map<TypeToken<?>, TypeAdapter<?>> typeTokenCache = new ConcurrentHashMap<TypeToken<?>, TypeAdapter<?>>();
 
@@ -265,152 +264,455 @@ public final class Gson {
         return new GsonBuilder(this);
     }
 
-    public Excluder excluder() {
-        return excluder;
-    }
+    // 将对象转为json
 
-    public FieldNamingStrategy fieldNamingStrategy() {
-        return fieldNamingStrategy;
-    }
-
-    public boolean serializeNulls() {
-        return serializeNulls;
-    }
-
-    public boolean htmlSafe() {
-        return htmlSafe;
-    }
-
-    private TypeAdapter<Number> doubleAdapter(boolean serializeSpecialFloatingPointValues) {
-        if (serializeSpecialFloatingPointValues) {
-            return TypeAdapters.DOUBLE;
+    /**
+     * This method serializes the specified object into its equivalent Json representation.
+     * 当指定的对象不是泛型类型时，应使用此方法。
+     * This method uses {@link Class#getClass()} to get the type for the specified object, but the {@code getClass()} loses the generic type information because of the Type Erasure feature of Java.
+     * Note that this method works fine if the any of the object fields are of generic type, just the object itself should not be of a generic type.
+     * 如果对象是通用类型，请改用{@link #toJson(Object, Type)}.
+     * 如果要将对象写到{@link Writer}，请改用{@link #toJson(Object, Appendable)}.
+     *
+     * @param src the object for which Json representation is to be created setting for Gson
+     * @return Json representation of {@code src}.
+     */
+    public String toJson(Object src) {
+        if (src == null) {
+            return toJson(JsonNull.INSTANCE);
         }
-        return new TypeAdapter<Number>() {
-            @Override
-            public Double read(JsonReader in) throws IOException {
-                if (in.peek() == JsonToken.NULL) {
-                    in.nextNull();
-                    return null;
-                }
-                return in.nextDouble();
-            }
-
-            @Override
-            public void write(JsonWriter out, Number value) throws IOException {
-                if (value == null) {
-                    out.nullValue();
-                    return;
-                }
-                double doubleValue = value.doubleValue();
-                checkValidFloatingPoint(doubleValue);
-                out.value(value);
-            }
-        };
+        return toJson(src, src.getClass());
     }
 
-    private TypeAdapter<Number> floatAdapter(boolean serializeSpecialFloatingPointValues) {
-        if (serializeSpecialFloatingPointValues) {
-            return TypeAdapters.FLOAT;
-        }
-        return new TypeAdapter<Number>() {
-            @Override
-            public Float read(JsonReader in) throws IOException {
-                if (in.peek() == JsonToken.NULL) {
-                    in.nextNull();
-                    return null;
-                }
-                return (float) in.nextDouble();
-            }
+    public static void main(String[] args) {
+        String json = new Gson().toJson(Integer.valueOf(1));
 
-            @Override
-            public void write(JsonWriter out, Number value) throws IOException {
-                if (value == null) {
-                    out.nullValue();
-                    return;
-                }
-                float floatValue = value.floatValue();
-                checkValidFloatingPoint(floatValue);
-                out.value(value);
-            }
-        };
+        System.out.println(json);
     }
 
-    static void checkValidFloatingPoint(double value) {
-        if (Double.isNaN(value) || Double.isInfinite(value)) {
-            throw new IllegalArgumentException(value
-                    + " is not a valid double value as per JSON specification. To override this"
-                    + " behavior, use GsonBuilder.serializeSpecialFloatingPointValues() method.");
+    /**
+     * This method serializes the specified object, including those of generic types, into its
+     * equivalent Json representation. This method must be used if the specified object is a generic
+     * type. For non-generic objects, use {@link #toJson(Object)} instead. If you want to write out
+     * the object to a {@link Appendable}, use {@link #toJson(Object, Type, Appendable)} instead.
+     *
+     * @param src       the object for which JSON representation is to be created
+     * @param typeOfSrc The specific genericized type of src. You can obtain
+     *                  this type by using the {@link com.google.gson.reflect.TypeToken} class. For example,
+     *                  to get the type for {@code Collection<Foo>}, you should use:
+     *                  <pre>
+     *                                                    Type typeOfSrc = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
+     *                                                    </pre>
+     * @return Json representation of {@code src}
+     */
+    public String toJson(Object src, Type typeOfSrc) {
+        StringWriter writer = new StringWriter();
+        toJson(src, typeOfSrc, writer);
+        return writer.toString();
+    }
+
+    /**
+     * This method serializes the specified object into its equivalent Json representation.
+     * This method should be used when the specified object is not a generic type. This method uses
+     * {@link Class#getClass()} to get the type for the specified object, but the
+     * {@code getClass()} loses the generic type information because of the Type Erasure feature
+     * of Java. Note that this method works fine if the any of the object fields are of generic type,
+     * just the object itself should not be of a generic type. If the object is of generic type, use
+     * {@link #toJson(Object, Type, Appendable)} instead.
+     *
+     * @param src    the object for which Json representation is to be created setting for Gson
+     * @param writer Writer to which the Json representation needs to be written
+     * @throws JsonIOException if there was a problem writing to the writer
+     * @since 1.2
+     */
+    public void toJson(Object src, Appendable writer) throws JsonIOException {
+        if (src != null) {
+            toJson(src, src.getClass(), writer);
+        } else {
+            toJson(JsonNull.INSTANCE, writer);
         }
     }
 
-    private static TypeAdapter<Number> longAdapter(LongSerializationPolicy longSerializationPolicy) {
-        if (longSerializationPolicy == LongSerializationPolicy.DEFAULT) {
-            return TypeAdapters.LONG;
+    /**
+     * This method serializes the specified object, including those of generic types, into its
+     * equivalent Json representation. This method must be used if the specified object is a generic
+     * type. For non-generic objects, use {@link #toJson(Object, Appendable)} instead.
+     *
+     * @param src       the object for which JSON representation is to be created
+     * @param typeOfSrc The specific genericized type of src. You can obtain
+     *                  this type by using the {@link com.google.gson.reflect.TypeToken} class. For example,
+     *                  to get the type for {@code Collection<Foo>}, you should use:
+     *                  <pre>
+     *                                                    Type typeOfSrc = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
+     *                                                    </pre>
+     * @param writer    Writer to which the Json representation of src needs to be written.
+     * @throws JsonIOException if there was a problem writing to the writer
+     * @since 1.2
+     */
+    public void toJson(Object src, Type typeOfSrc, Appendable writer) throws JsonIOException {
+        try {
+            JsonWriter jsonWriter = newJsonWriter(Streams.writerForAppendable(writer));
+            toJson(src, typeOfSrc, jsonWriter);
+        } catch (IOException e) {
+            throw new JsonIOException(e);
         }
-        return new TypeAdapter<Number>() {
-            @Override
-            public Number read(JsonReader in) throws IOException {
-                if (in.peek() == JsonToken.NULL) {
-                    in.nextNull();
-                    return null;
-                }
-                return in.nextLong();
-            }
-
-            @Override
-            public void write(JsonWriter out, Number value) throws IOException {
-                if (value == null) {
-                    out.nullValue();
-                    return;
-                }
-                out.value(value.toString());
-            }
-        };
     }
 
-    private static TypeAdapter<AtomicLong> atomicLongAdapter(final TypeAdapter<Number> longAdapter) {
-        return new TypeAdapter<AtomicLong>() {
-            @Override
-            public void write(JsonWriter out, AtomicLong value) throws IOException {
-                longAdapter.write(out, value.get());
-            }
-
-            @Override
-            public AtomicLong read(JsonReader in) throws IOException {
-                Number value = longAdapter.read(in);
-                return new AtomicLong(value.longValue());
-            }
-        }.nullSafe();
+    /**
+     * Writes the JSON representation of {@code src} of type {@code typeOfSrc} to
+     * {@code writer}.
+     *
+     * @throws JsonIOException if there was a problem writing to the writer
+     */
+    @SuppressWarnings("unchecked")
+    public void toJson(Object src, Type typeOfSrc, JsonWriter writer) throws JsonIOException {
+        TypeAdapter<?> adapter = getAdapter(TypeToken.get(typeOfSrc));
+        boolean oldLenient = writer.isLenient();
+        writer.setLenient(true);
+        boolean oldHtmlSafe = writer.isHtmlSafe();
+        writer.setHtmlSafe(htmlSafe);
+        boolean oldSerializeNulls = writer.getSerializeNulls();
+        writer.setSerializeNulls(serializeNulls);
+        try {
+            ((TypeAdapter<Object>) adapter).write(writer, src);
+        } catch (IOException e) {
+            throw new JsonIOException(e);
+        } catch (AssertionError e) {
+            AssertionError error = new AssertionError("AssertionError (GSON " + GsonBuildConfig.VERSION + "): " + e.getMessage());
+            error.initCause(e);
+            throw error;
+        } finally {
+            writer.setLenient(oldLenient);
+            writer.setHtmlSafe(oldHtmlSafe);
+            writer.setSerializeNulls(oldSerializeNulls);
+        }
     }
 
-    private static TypeAdapter<AtomicLongArray> atomicLongArrayAdapter(final TypeAdapter<Number> longAdapter) {
-        return new TypeAdapter<AtomicLongArray>() {
-            @Override
-            public void write(JsonWriter out, AtomicLongArray value) throws IOException {
-                out.beginArray();
-                for (int i = 0, length = value.length(); i < length; i++) {
-                    longAdapter.write(out, value.get(i));
-                }
-                out.endArray();
-            }
+    /**
+     * Converts a tree of {@link JsonElement}s into its equivalent JSON representation.
+     *
+     * @param jsonElement root of a tree of {@link JsonElement}s
+     * @return JSON String representation of the tree
+     * @since 1.4
+     */
+    public String toJson(JsonElement jsonElement) {
+        StringWriter writer = new StringWriter();
+        toJson(jsonElement, writer);
+        return writer.toString();
+    }
 
-            @Override
-            public AtomicLongArray read(JsonReader in) throws IOException {
-                List<Long> list = new ArrayList<Long>();
-                in.beginArray();
-                while (in.hasNext()) {
-                    long value = longAdapter.read(in).longValue();
-                    list.add(value);
-                }
-                in.endArray();
-                int length = list.size();
-                AtomicLongArray array = new AtomicLongArray(length);
-                for (int i = 0; i < length; ++i) {
-                    array.set(i, list.get(i));
-                }
-                return array;
+    /**
+     * Writes out the equivalent JSON for a tree of {@link JsonElement}s.
+     *
+     * @param jsonElement root of a tree of {@link JsonElement}s
+     * @param writer      Writer to which the Json representation needs to be written
+     * @throws JsonIOException if there was a problem writing to the writer
+     * @since 1.4
+     */
+    public void toJson(JsonElement jsonElement, Appendable writer) throws JsonIOException {
+        try {
+            JsonWriter jsonWriter = newJsonWriter(Streams.writerForAppendable(writer));
+            toJson(jsonElement, jsonWriter);
+        } catch (IOException e) {
+            throw new JsonIOException(e);
+        }
+    }
+
+    /**
+     * Writes the JSON for {@code jsonElement} to {@code writer}.
+     *
+     * @throws JsonIOException if there was a problem writing to the writer
+     */
+    public void toJson(JsonElement jsonElement, JsonWriter writer) throws JsonIOException {
+        boolean oldLenient = writer.isLenient();
+        writer.setLenient(true);
+        boolean oldHtmlSafe = writer.isHtmlSafe();
+        writer.setHtmlSafe(htmlSafe);
+        boolean oldSerializeNulls = writer.getSerializeNulls();
+        writer.setSerializeNulls(serializeNulls);
+        try {
+            Streams.write(jsonElement, writer);
+        } catch (IOException e) {
+            throw new JsonIOException(e);
+        } catch (AssertionError e) {
+            AssertionError error = new AssertionError("AssertionError (GSON " + GsonBuildConfig.VERSION + "): " + e.getMessage());
+            error.initCause(e);
+            throw error;
+        } finally {
+            writer.setLenient(oldLenient);
+            writer.setHtmlSafe(oldHtmlSafe);
+            writer.setSerializeNulls(oldSerializeNulls);
+        }
+    }
+
+
+    // 将json转为对象
+
+    /**
+     * This method deserializes the specified Json into an object of the specified class. It is not
+     * suitable to use if the specified class is a generic type since it will not have the generic
+     * type information because of the Type Erasure feature of Java. Therefore, this method should not
+     * be used if the desired type is a generic type. Note that this method works fine if the any of
+     * the fields of the specified object are generics, just the object itself should not be a
+     * generic type. For the cases when the object is of generic type, invoke
+     * {@link #fromJson(String, Type)}. If you have the Json in a {@link Reader} instead of
+     * a String, use {@link #fromJson(Reader, Class)} instead.
+     *
+     * @param <T>      the type of the desired object
+     * @param json     the string from which the object is to be deserialized
+     * @param classOfT the class of T
+     * @return an object of type T from the string. Returns {@code null} if {@code json} is {@code null}
+     * or if {@code json} is empty.
+     * @throws JsonSyntaxException if json is not a valid representation for an object of type
+     *                             classOfT
+     */
+    public <T> T fromJson(String json, Class<T> classOfT) throws JsonSyntaxException {
+        Object object = fromJson(json, (Type) classOfT);
+        return Primitives.wrap(classOfT).cast(object);
+    }
+
+    /**
+     * This method deserializes the specified Json into an object of the specified type. This method
+     * is useful if the specified object is a generic type. For non-generic objects, use
+     * {@link #fromJson(String, Class)} instead. If you have the Json in a {@link Reader} instead of
+     * a String, use {@link #fromJson(Reader, Type)} instead.
+     *
+     * @param <T>     the type of the desired object
+     * @param json    the string from which the object is to be deserialized
+     * @param typeOfT The specific genericized type of src. You can obtain this type by using the
+     *                {@link com.google.gson.reflect.TypeToken} class. For example, to get the type for
+     *                {@code Collection<Foo>}, you should use:
+     *                <pre>
+     *                                              Type typeOfT = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
+     *                                              </pre>
+     * @return an object of type T from the string. Returns {@code null} if {@code json} is {@code null}
+     * or if {@code json} is empty.
+     * @throws JsonParseException  if json is not a valid representation for an object of type typeOfT
+     * @throws JsonSyntaxException if json is not a valid representation for an object of type
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T fromJson(String json, Type typeOfT) throws JsonSyntaxException {
+        if (json == null) {
+            return null;
+        }
+        StringReader reader = new StringReader(json);
+        T target = (T) fromJson(reader, typeOfT);
+        return target;
+    }
+
+    /**
+     * This method deserializes the Json read from the specified reader into an object of the
+     * specified class. It is not suitable to use if the specified class is a generic type since it
+     * will not have the generic type information because of the Type Erasure feature of Java.
+     * Therefore, this method should not be used if the desired type is a generic type. Note that
+     * this method works fine if the any of the fields of the specified object are generics, just the
+     * object itself should not be a generic type. For the cases when the object is of generic type,
+     * invoke {@link #fromJson(Reader, Type)}. If you have the Json in a String form instead of a
+     * {@link Reader}, use {@link #fromJson(String, Class)} instead.
+     *
+     * @param <T>      the type of the desired object
+     * @param json     the reader producing the Json from which the object is to be deserialized.
+     * @param classOfT the class of T
+     * @return an object of type T from the string. Returns {@code null} if {@code json} is at EOF.
+     * @throws JsonIOException     if there was a problem reading from the Reader
+     * @throws JsonSyntaxException if json is not a valid representation for an object of type
+     * @since 1.2
+     */
+    public <T> T fromJson(Reader json, Class<T> classOfT) throws JsonSyntaxException, JsonIOException {
+        JsonReader jsonReader = newJsonReader(json);
+        Object object = fromJson(jsonReader, classOfT);
+        assertFullConsumption(object, jsonReader);
+        return Primitives.wrap(classOfT).cast(object);
+    }
+
+    /**
+     * This method deserializes the Json read from the specified reader into an object of the
+     * specified type. This method is useful if the specified object is a generic type. For
+     * non-generic objects, use {@link #fromJson(Reader, Class)} instead. If you have the Json in a
+     * String form instead of a {@link Reader}, use {@link #fromJson(String, Type)} instead.
+     *
+     * @param <T>     the type of the desired object
+     * @param json    the reader producing Json from which the object is to be deserialized
+     * @param typeOfT The specific genericized type of src. You can obtain this type by using the
+     *                {@link com.google.gson.reflect.TypeToken} class. For example, to get the type for
+     *                {@code Collection<Foo>}, you should use:
+     *                <pre>
+     *                                              Type typeOfT = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
+     *                                              </pre>
+     * @return an object of type T from the json. Returns {@code null} if {@code json} is at EOF.
+     * @throws JsonIOException     if there was a problem reading from the Reader
+     * @throws JsonSyntaxException if json is not a valid representation for an object of type
+     * @since 1.2
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T fromJson(Reader json, Type typeOfT) throws JsonIOException, JsonSyntaxException {
+        JsonReader jsonReader = newJsonReader(json);
+        T object = (T) fromJson(jsonReader, typeOfT);
+        assertFullConsumption(object, jsonReader);
+        return object;
+    }
+
+    /**
+     * Reads the next JSON value from {@code reader} and convert it to an object
+     * of type {@code typeOfT}. Returns {@code null}, if the {@code reader} is at EOF.
+     * Since Type is not parameterized by T, this method is type unsafe and should be used carefully
+     *
+     * @throws JsonIOException     if there was a problem writing to the Reader
+     * @throws JsonSyntaxException if json is not a valid representation for an object of type
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T fromJson(JsonReader reader, Type typeOfT) throws JsonIOException, JsonSyntaxException {
+        boolean isEmpty = true;
+        boolean oldLenient = reader.isLenient();
+        reader.setLenient(true);
+        try {
+            reader.peek();
+            isEmpty = false;
+            TypeToken<T> typeToken = (TypeToken<T>) TypeToken.get(typeOfT);
+            TypeAdapter<T> typeAdapter = getAdapter(typeToken);
+            T object = typeAdapter.read(reader);
+            return object;
+        } catch (EOFException e) {
+            /*
+             * For compatibility with JSON 1.5 and earlier, we return null for empty
+             * documents instead of throwing.
+             */
+            if (isEmpty) {
+                return null;
             }
-        }.nullSafe();
+            throw new JsonSyntaxException(e);
+        } catch (IllegalStateException e) {
+            throw new JsonSyntaxException(e);
+        } catch (IOException e) {
+            // TODO(inder): Figure out whether it is indeed right to rethrow this as JsonSyntaxException
+            throw new JsonSyntaxException(e);
+        } catch (AssertionError e) {
+            AssertionError error = new AssertionError("AssertionError (GSON " + GsonBuildConfig.VERSION + "): " + e.getMessage());
+            error.initCause(e);
+            throw error;
+        } finally {
+            reader.setLenient(oldLenient);
+        }
+    }
+
+    /**
+     * This method deserializes the Json read from the specified parse tree into an object of the
+     * specified type. It is not suitable to use if the specified class is a generic type since it
+     * will not have the generic type information because of the Type Erasure feature of Java.
+     * Therefore, this method should not be used if the desired type is a generic type. Note that
+     * this method works fine if the any of the fields of the specified object are generics, just the
+     * object itself should not be a generic type. For the cases when the object is of generic type,
+     * invoke {@link #fromJson(JsonElement, Type)}.
+     *
+     * @param <T>      the type of the desired object
+     * @param json     the root of the parse tree of {@link JsonElement}s from which the object is to
+     *                 be deserialized
+     * @param classOfT The class of T
+     * @return an object of type T from the json. Returns {@code null} if {@code json} is {@code null}
+     * or if {@code json} is empty.
+     * @throws JsonSyntaxException if json is not a valid representation for an object of type typeOfT
+     * @since 1.3
+     */
+    public <T> T fromJson(JsonElement json, Class<T> classOfT) throws JsonSyntaxException {
+        Object object = fromJson(json, (Type) classOfT);
+        return Primitives.wrap(classOfT).cast(object);
+    }
+
+    /**
+     * This method deserializes the Json read from the specified parse tree into an object of the
+     * specified type. This method is useful if the specified object is a generic type. For
+     * non-generic objects, use {@link #fromJson(JsonElement, Class)} instead.
+     *
+     * @param <T>     the type of the desired object
+     * @param json    the root of the parse tree of {@link JsonElement}s from which the object is to
+     *                be deserialized
+     * @param typeOfT The specific genericized type of src. You can obtain this type by using the
+     *                {@link com.google.gson.reflect.TypeToken} class. For example, to get the type for
+     *                {@code Collection<Foo>}, you should use:
+     *                <pre>
+     *                                              Type typeOfT = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
+     *                                              </pre>
+     * @return an object of type T from the json. Returns {@code null} if {@code json} is {@code null}
+     * or if {@code json} is empty.
+     * @throws JsonSyntaxException if json is not a valid representation for an object of type typeOfT
+     * @since 1.3
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T fromJson(JsonElement json, Type typeOfT) throws JsonSyntaxException {
+        if (json == null) {
+            return null;
+        }
+        return (T) fromJson(new JsonTreeReader(json), typeOfT);
+    }
+
+
+
+    /**
+     * This method serializes the specified object into its equivalent representation as a tree of
+     * {@link JsonElement}s. This method should be used when the specified object is not a generic
+     * type. This method uses {@link Class#getClass()} to get the type for the specified object, but
+     * the {@code getClass()} loses the generic type information because of the Type Erasure feature
+     * of Java. Note that this method works fine if the any of the object fields are of generic type,
+     * just the object itself should not be of a generic type. If the object is of generic type, use
+     * {@link #toJsonTree(Object, Type)} instead.
+     *
+     * @param src the object for which Json representation is to be created setting for Gson
+     * @return Json representation of {@code src}.
+     * @since 1.4
+     */
+    public JsonElement toJsonTree(Object src) {
+        if (src == null) {
+            return JsonNull.INSTANCE;
+        }
+        return toJsonTree(src, src.getClass());
+    }
+
+    /**
+     * This method serializes the specified object, including those of generic types, into its
+     * equivalent representation as a tree of {@link JsonElement}s. This method must be used if the
+     * specified object is a generic type. For non-generic objects, use {@link #toJsonTree(Object)}
+     * instead.
+     *
+     * @param src       the object for which JSON representation is to be created
+     * @param typeOfSrc The specific genericized type of src. You can obtain
+     *                  this type by using the {@link com.google.gson.reflect.TypeToken} class. For example,
+     *                  to get the type for {@code Collection<Foo>}, you should use:
+     *                  <pre>
+     *                                                    Type typeOfSrc = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
+     *                                                    </pre>
+     * @return Json representation of {@code src}
+     * @since 1.4
+     */
+    public JsonElement toJsonTree(Object src, Type typeOfSrc) {
+        JsonTreeWriter writer = new JsonTreeWriter();
+        toJson(src, typeOfSrc, writer);
+        return writer.get();
+    }
+
+
+
+    /**
+     * Returns a new JSON writer configured for the settings on this Gson instance.
+     */
+    public JsonWriter newJsonWriter(Writer writer) throws IOException {
+        if (generateNonExecutableJson) {
+            writer.write(JSON_NON_EXECUTABLE_PREFIX);
+        }
+        JsonWriter jsonWriter = new JsonWriter(writer);
+        if (prettyPrinting) {
+            jsonWriter.setIndent("  ");
+        }
+        jsonWriter.setSerializeNulls(serializeNulls);
+        return jsonWriter;
+    }
+
+    /**
+     * Returns a new JSON reader configured for the settings on this Gson instance.
+     */
+    public JsonReader newJsonReader(Reader reader) {
+        JsonReader jsonReader = new JsonReader(reader);
+        jsonReader.setLenient(lenient);
+        return jsonReader;
     }
 
     /**
@@ -546,349 +848,140 @@ public final class Gson {
         return getAdapter(TypeToken.get(type));
     }
 
-    /**
-     * This method serializes the specified object into its equivalent representation as a tree of
-     * {@link JsonElement}s. This method should be used when the specified object is not a generic
-     * type. This method uses {@link Class#getClass()} to get the type for the specified object, but
-     * the {@code getClass()} loses the generic type information because of the Type Erasure feature
-     * of Java. Note that this method works fine if the any of the object fields are of generic type,
-     * just the object itself should not be of a generic type. If the object is of generic type, use
-     * {@link #toJsonTree(Object, Type)} instead.
-     *
-     * @param src the object for which Json representation is to be created setting for Gson
-     * @return Json representation of {@code src}.
-     * @since 1.4
-     */
-    public JsonElement toJsonTree(Object src) {
-        if (src == null) {
-            return JsonNull.INSTANCE;
+
+
+
+
+    private TypeAdapter<Number> doubleAdapter(boolean serializeSpecialFloatingPointValues) {
+        if (serializeSpecialFloatingPointValues) {
+            return TypeAdapters.DOUBLE;
         }
-        return toJsonTree(src, src.getClass());
+        return new TypeAdapter<Number>() {
+            @Override
+            public Double read(JsonReader in) throws IOException {
+                if (in.peek() == JsonToken.NULL) {
+                    in.nextNull();
+                    return null;
+                }
+                return in.nextDouble();
+            }
+
+            @Override
+            public void write(JsonWriter out, Number value) throws IOException {
+                if (value == null) {
+                    out.nullValue();
+                    return;
+                }
+                double doubleValue = value.doubleValue();
+                checkValidFloatingPoint(doubleValue);
+                out.value(value);
+            }
+        };
     }
 
-    /**
-     * This method serializes the specified object, including those of generic types, into its
-     * equivalent representation as a tree of {@link JsonElement}s. This method must be used if the
-     * specified object is a generic type. For non-generic objects, use {@link #toJsonTree(Object)}
-     * instead.
-     *
-     * @param src       the object for which JSON representation is to be created
-     * @param typeOfSrc The specific genericized type of src. You can obtain
-     *                  this type by using the {@link com.google.gson.reflect.TypeToken} class. For example,
-     *                  to get the type for {@code Collection<Foo>}, you should use:
-     *                  <pre>
-     *                                                    Type typeOfSrc = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
-     *                                                    </pre>
-     * @return Json representation of {@code src}
-     * @since 1.4
-     */
-    public JsonElement toJsonTree(Object src, Type typeOfSrc) {
-        JsonTreeWriter writer = new JsonTreeWriter();
-        toJson(src, typeOfSrc, writer);
-        return writer.get();
-    }
-
-    /**
-     * This method serializes the specified object into its equivalent Json representation.
-     * This method should be used when the specified object is not a generic type. This method uses
-     * {@link Class#getClass()} to get the type for the specified object, but the
-     * {@code getClass()} loses the generic type information because of the Type Erasure feature
-     * of Java. Note that this method works fine if the any of the object fields are of generic type,
-     * just the object itself should not be of a generic type. If the object is of generic type, use
-     * {@link #toJson(Object, Type)} instead. If you want to write out the object to a
-     * {@link Writer}, use {@link #toJson(Object, Appendable)} instead.
-     *
-     * @param src the object for which Json representation is to be created setting for Gson
-     * @return Json representation of {@code src}.
-     */
-    public String toJson(Object src) {
-        if (src == null) {
-            return toJson(JsonNull.INSTANCE);
+    private TypeAdapter<Number> floatAdapter(boolean serializeSpecialFloatingPointValues) {
+        if (serializeSpecialFloatingPointValues) {
+            return TypeAdapters.FLOAT;
         }
-        return toJson(src, src.getClass());
+        return new TypeAdapter<Number>() {
+            @Override
+            public Float read(JsonReader in) throws IOException {
+                if (in.peek() == JsonToken.NULL) {
+                    in.nextNull();
+                    return null;
+                }
+                return (float) in.nextDouble();
+            }
+
+            @Override
+            public void write(JsonWriter out, Number value) throws IOException {
+                if (value == null) {
+                    out.nullValue();
+                    return;
+                }
+                float floatValue = value.floatValue();
+                checkValidFloatingPoint(floatValue);
+                out.value(value);
+            }
+        };
     }
 
-    /**
-     * This method serializes the specified object, including those of generic types, into its
-     * equivalent Json representation. This method must be used if the specified object is a generic
-     * type. For non-generic objects, use {@link #toJson(Object)} instead. If you want to write out
-     * the object to a {@link Appendable}, use {@link #toJson(Object, Type, Appendable)} instead.
-     *
-     * @param src       the object for which JSON representation is to be created
-     * @param typeOfSrc The specific genericized type of src. You can obtain
-     *                  this type by using the {@link com.google.gson.reflect.TypeToken} class. For example,
-     *                  to get the type for {@code Collection<Foo>}, you should use:
-     *                  <pre>
-     *                                                    Type typeOfSrc = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
-     *                                                    </pre>
-     * @return Json representation of {@code src}
-     */
-    public String toJson(Object src, Type typeOfSrc) {
-        StringWriter writer = new StringWriter();
-        toJson(src, typeOfSrc, writer);
-        return writer.toString();
-    }
-
-    /**
-     * This method serializes the specified object into its equivalent Json representation.
-     * This method should be used when the specified object is not a generic type. This method uses
-     * {@link Class#getClass()} to get the type for the specified object, but the
-     * {@code getClass()} loses the generic type information because of the Type Erasure feature
-     * of Java. Note that this method works fine if the any of the object fields are of generic type,
-     * just the object itself should not be of a generic type. If the object is of generic type, use
-     * {@link #toJson(Object, Type, Appendable)} instead.
-     *
-     * @param src    the object for which Json representation is to be created setting for Gson
-     * @param writer Writer to which the Json representation needs to be written
-     * @throws JsonIOException if there was a problem writing to the writer
-     * @since 1.2
-     */
-    public void toJson(Object src, Appendable writer) throws JsonIOException {
-        if (src != null) {
-            toJson(src, src.getClass(), writer);
-        } else {
-            toJson(JsonNull.INSTANCE, writer);
+    static void checkValidFloatingPoint(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            throw new IllegalArgumentException(value
+                    + " is not a valid double value as per JSON specification. To override this"
+                    + " behavior, use GsonBuilder.serializeSpecialFloatingPointValues() method.");
         }
     }
 
-    /**
-     * This method serializes the specified object, including those of generic types, into its
-     * equivalent Json representation. This method must be used if the specified object is a generic
-     * type. For non-generic objects, use {@link #toJson(Object, Appendable)} instead.
-     *
-     * @param src       the object for which JSON representation is to be created
-     * @param typeOfSrc The specific genericized type of src. You can obtain
-     *                  this type by using the {@link com.google.gson.reflect.TypeToken} class. For example,
-     *                  to get the type for {@code Collection<Foo>}, you should use:
-     *                  <pre>
-     *                                                    Type typeOfSrc = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
-     *                                                    </pre>
-     * @param writer    Writer to which the Json representation of src needs to be written.
-     * @throws JsonIOException if there was a problem writing to the writer
-     * @since 1.2
-     */
-    public void toJson(Object src, Type typeOfSrc, Appendable writer) throws JsonIOException {
-        try {
-            JsonWriter jsonWriter = newJsonWriter(Streams.writerForAppendable(writer));
-            toJson(src, typeOfSrc, jsonWriter);
-        } catch (IOException e) {
-            throw new JsonIOException(e);
+    private static TypeAdapter<Number> longAdapter(LongSerializationPolicy longSerializationPolicy) {
+        if (longSerializationPolicy == LongSerializationPolicy.DEFAULT) {
+            return TypeAdapters.LONG;
         }
+        return new TypeAdapter<Number>() {
+            @Override
+            public Number read(JsonReader in) throws IOException {
+                if (in.peek() == JsonToken.NULL) {
+                    in.nextNull();
+                    return null;
+                }
+                return in.nextLong();
+            }
+
+            @Override
+            public void write(JsonWriter out, Number value) throws IOException {
+                if (value == null) {
+                    out.nullValue();
+                    return;
+                }
+                out.value(value.toString());
+            }
+        };
     }
 
-    /**
-     * Writes the JSON representation of {@code src} of type {@code typeOfSrc} to
-     * {@code writer}.
-     *
-     * @throws JsonIOException if there was a problem writing to the writer
-     */
-    @SuppressWarnings("unchecked")
-    public void toJson(Object src, Type typeOfSrc, JsonWriter writer) throws JsonIOException {
-        TypeAdapter<?> adapter = getAdapter(TypeToken.get(typeOfSrc));
-        boolean oldLenient = writer.isLenient();
-        writer.setLenient(true);
-        boolean oldHtmlSafe = writer.isHtmlSafe();
-        writer.setHtmlSafe(htmlSafe);
-        boolean oldSerializeNulls = writer.getSerializeNulls();
-        writer.setSerializeNulls(serializeNulls);
-        try {
-            ((TypeAdapter<Object>) adapter).write(writer, src);
-        } catch (IOException e) {
-            throw new JsonIOException(e);
-        } catch (AssertionError e) {
-            AssertionError error = new AssertionError("AssertionError (GSON " + GsonBuildConfig.VERSION + "): " + e.getMessage());
-            error.initCause(e);
-            throw error;
-        } finally {
-            writer.setLenient(oldLenient);
-            writer.setHtmlSafe(oldHtmlSafe);
-            writer.setSerializeNulls(oldSerializeNulls);
-        }
+    private static TypeAdapter<AtomicLong> atomicLongAdapter(final TypeAdapter<Number> longAdapter) {
+        return new TypeAdapter<AtomicLong>() {
+            @Override
+            public void write(JsonWriter out, AtomicLong value) throws IOException {
+                longAdapter.write(out, value.get());
+            }
+
+            @Override
+            public AtomicLong read(JsonReader in) throws IOException {
+                Number value = longAdapter.read(in);
+                return new AtomicLong(value.longValue());
+            }
+        }.nullSafe();
     }
 
-    /**
-     * Converts a tree of {@link JsonElement}s into its equivalent JSON representation.
-     *
-     * @param jsonElement root of a tree of {@link JsonElement}s
-     * @return JSON String representation of the tree
-     * @since 1.4
-     */
-    public String toJson(JsonElement jsonElement) {
-        StringWriter writer = new StringWriter();
-        toJson(jsonElement, writer);
-        return writer.toString();
-    }
+    private static TypeAdapter<AtomicLongArray> atomicLongArrayAdapter(final TypeAdapter<Number> longAdapter) {
+        return new TypeAdapter<AtomicLongArray>() {
+            @Override
+            public void write(JsonWriter out, AtomicLongArray value) throws IOException {
+                out.beginArray();
+                for (int i = 0, length = value.length(); i < length; i++) {
+                    longAdapter.write(out, value.get(i));
+                }
+                out.endArray();
+            }
 
-    /**
-     * Writes out the equivalent JSON for a tree of {@link JsonElement}s.
-     *
-     * @param jsonElement root of a tree of {@link JsonElement}s
-     * @param writer      Writer to which the Json representation needs to be written
-     * @throws JsonIOException if there was a problem writing to the writer
-     * @since 1.4
-     */
-    public void toJson(JsonElement jsonElement, Appendable writer) throws JsonIOException {
-        try {
-            JsonWriter jsonWriter = newJsonWriter(Streams.writerForAppendable(writer));
-            toJson(jsonElement, jsonWriter);
-        } catch (IOException e) {
-            throw new JsonIOException(e);
-        }
-    }
-
-    /**
-     * Returns a new JSON writer configured for the settings on this Gson instance.
-     */
-    public JsonWriter newJsonWriter(Writer writer) throws IOException {
-        if (generateNonExecutableJson) {
-            writer.write(JSON_NON_EXECUTABLE_PREFIX);
-        }
-        JsonWriter jsonWriter = new JsonWriter(writer);
-        if (prettyPrinting) {
-            jsonWriter.setIndent("  ");
-        }
-        jsonWriter.setSerializeNulls(serializeNulls);
-        return jsonWriter;
-    }
-
-    /**
-     * Returns a new JSON reader configured for the settings on this Gson instance.
-     */
-    public JsonReader newJsonReader(Reader reader) {
-        JsonReader jsonReader = new JsonReader(reader);
-        jsonReader.setLenient(lenient);
-        return jsonReader;
-    }
-
-    /**
-     * Writes the JSON for {@code jsonElement} to {@code writer}.
-     *
-     * @throws JsonIOException if there was a problem writing to the writer
-     */
-    public void toJson(JsonElement jsonElement, JsonWriter writer) throws JsonIOException {
-        boolean oldLenient = writer.isLenient();
-        writer.setLenient(true);
-        boolean oldHtmlSafe = writer.isHtmlSafe();
-        writer.setHtmlSafe(htmlSafe);
-        boolean oldSerializeNulls = writer.getSerializeNulls();
-        writer.setSerializeNulls(serializeNulls);
-        try {
-            Streams.write(jsonElement, writer);
-        } catch (IOException e) {
-            throw new JsonIOException(e);
-        } catch (AssertionError e) {
-            AssertionError error = new AssertionError("AssertionError (GSON " + GsonBuildConfig.VERSION + "): " + e.getMessage());
-            error.initCause(e);
-            throw error;
-        } finally {
-            writer.setLenient(oldLenient);
-            writer.setHtmlSafe(oldHtmlSafe);
-            writer.setSerializeNulls(oldSerializeNulls);
-        }
-    }
-
-    /**
-     * This method deserializes the specified Json into an object of the specified class. It is not
-     * suitable to use if the specified class is a generic type since it will not have the generic
-     * type information because of the Type Erasure feature of Java. Therefore, this method should not
-     * be used if the desired type is a generic type. Note that this method works fine if the any of
-     * the fields of the specified object are generics, just the object itself should not be a
-     * generic type. For the cases when the object is of generic type, invoke
-     * {@link #fromJson(String, Type)}. If you have the Json in a {@link Reader} instead of
-     * a String, use {@link #fromJson(Reader, Class)} instead.
-     *
-     * @param <T>      the type of the desired object
-     * @param json     the string from which the object is to be deserialized
-     * @param classOfT the class of T
-     * @return an object of type T from the string. Returns {@code null} if {@code json} is {@code null}
-     * or if {@code json} is empty.
-     * @throws JsonSyntaxException if json is not a valid representation for an object of type
-     *                             classOfT
-     */
-    public <T> T fromJson(String json, Class<T> classOfT) throws JsonSyntaxException {
-        Object object = fromJson(json, (Type) classOfT);
-        return Primitives.wrap(classOfT).cast(object);
-    }
-
-    /**
-     * This method deserializes the specified Json into an object of the specified type. This method
-     * is useful if the specified object is a generic type. For non-generic objects, use
-     * {@link #fromJson(String, Class)} instead. If you have the Json in a {@link Reader} instead of
-     * a String, use {@link #fromJson(Reader, Type)} instead.
-     *
-     * @param <T>     the type of the desired object
-     * @param json    the string from which the object is to be deserialized
-     * @param typeOfT The specific genericized type of src. You can obtain this type by using the
-     *                {@link com.google.gson.reflect.TypeToken} class. For example, to get the type for
-     *                {@code Collection<Foo>}, you should use:
-     *                <pre>
-     *                                              Type typeOfT = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
-     *                                              </pre>
-     * @return an object of type T from the string. Returns {@code null} if {@code json} is {@code null}
-     * or if {@code json} is empty.
-     * @throws JsonParseException  if json is not a valid representation for an object of type typeOfT
-     * @throws JsonSyntaxException if json is not a valid representation for an object of type
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T fromJson(String json, Type typeOfT) throws JsonSyntaxException {
-        if (json == null) {
-            return null;
-        }
-        StringReader reader = new StringReader(json);
-        T target = (T) fromJson(reader, typeOfT);
-        return target;
-    }
-
-    /**
-     * This method deserializes the Json read from the specified reader into an object of the
-     * specified class. It is not suitable to use if the specified class is a generic type since it
-     * will not have the generic type information because of the Type Erasure feature of Java.
-     * Therefore, this method should not be used if the desired type is a generic type. Note that
-     * this method works fine if the any of the fields of the specified object are generics, just the
-     * object itself should not be a generic type. For the cases when the object is of generic type,
-     * invoke {@link #fromJson(Reader, Type)}. If you have the Json in a String form instead of a
-     * {@link Reader}, use {@link #fromJson(String, Class)} instead.
-     *
-     * @param <T>      the type of the desired object
-     * @param json     the reader producing the Json from which the object is to be deserialized.
-     * @param classOfT the class of T
-     * @return an object of type T from the string. Returns {@code null} if {@code json} is at EOF.
-     * @throws JsonIOException     if there was a problem reading from the Reader
-     * @throws JsonSyntaxException if json is not a valid representation for an object of type
-     * @since 1.2
-     */
-    public <T> T fromJson(Reader json, Class<T> classOfT) throws JsonSyntaxException, JsonIOException {
-        JsonReader jsonReader = newJsonReader(json);
-        Object object = fromJson(jsonReader, classOfT);
-        assertFullConsumption(object, jsonReader);
-        return Primitives.wrap(classOfT).cast(object);
-    }
-
-    /**
-     * This method deserializes the Json read from the specified reader into an object of the
-     * specified type. This method is useful if the specified object is a generic type. For
-     * non-generic objects, use {@link #fromJson(Reader, Class)} instead. If you have the Json in a
-     * String form instead of a {@link Reader}, use {@link #fromJson(String, Type)} instead.
-     *
-     * @param <T>     the type of the desired object
-     * @param json    the reader producing Json from which the object is to be deserialized
-     * @param typeOfT The specific genericized type of src. You can obtain this type by using the
-     *                {@link com.google.gson.reflect.TypeToken} class. For example, to get the type for
-     *                {@code Collection<Foo>}, you should use:
-     *                <pre>
-     *                                              Type typeOfT = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
-     *                                              </pre>
-     * @return an object of type T from the json. Returns {@code null} if {@code json} is at EOF.
-     * @throws JsonIOException     if there was a problem reading from the Reader
-     * @throws JsonSyntaxException if json is not a valid representation for an object of type
-     * @since 1.2
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T fromJson(Reader json, Type typeOfT) throws JsonIOException, JsonSyntaxException {
-        JsonReader jsonReader = newJsonReader(json);
-        T object = (T) fromJson(jsonReader, typeOfT);
-        assertFullConsumption(object, jsonReader);
-        return object;
+            @Override
+            public AtomicLongArray read(JsonReader in) throws IOException {
+                List<Long> list = new ArrayList<Long>();
+                in.beginArray();
+                while (in.hasNext()) {
+                    long value = longAdapter.read(in).longValue();
+                    list.add(value);
+                }
+                in.endArray();
+                int length = list.size();
+                AtomicLongArray array = new AtomicLongArray(length);
+                for (int i = 0; i < length; ++i) {
+                    array.set(i, list.get(i));
+                }
+                return array;
+            }
+        }.nullSafe();
     }
 
     private static void assertFullConsumption(Object obj, JsonReader reader) {
@@ -903,97 +996,29 @@ public final class Gson {
         }
     }
 
-    /**
-     * Reads the next JSON value from {@code reader} and convert it to an object
-     * of type {@code typeOfT}. Returns {@code null}, if the {@code reader} is at EOF.
-     * Since Type is not parameterized by T, this method is type unsafe and should be used carefully
-     *
-     * @throws JsonIOException     if there was a problem writing to the Reader
-     * @throws JsonSyntaxException if json is not a valid representation for an object of type
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T fromJson(JsonReader reader, Type typeOfT) throws JsonIOException, JsonSyntaxException {
-        boolean isEmpty = true;
-        boolean oldLenient = reader.isLenient();
-        reader.setLenient(true);
-        try {
-            reader.peek();
-            isEmpty = false;
-            TypeToken<T> typeToken = (TypeToken<T>) TypeToken.get(typeOfT);
-            TypeAdapter<T> typeAdapter = getAdapter(typeToken);
-            T object = typeAdapter.read(reader);
-            return object;
-        } catch (EOFException e) {
-            /*
-             * For compatibility with JSON 1.5 and earlier, we return null for empty
-             * documents instead of throwing.
-             */
-            if (isEmpty) {
-                return null;
-            }
-            throw new JsonSyntaxException(e);
-        } catch (IllegalStateException e) {
-            throw new JsonSyntaxException(e);
-        } catch (IOException e) {
-            // TODO(inder): Figure out whether it is indeed right to rethrow this as JsonSyntaxException
-            throw new JsonSyntaxException(e);
-        } catch (AssertionError e) {
-            AssertionError error = new AssertionError("AssertionError (GSON " + GsonBuildConfig.VERSION + "): " + e.getMessage());
-            error.initCause(e);
-            throw error;
-        } finally {
-            reader.setLenient(oldLenient);
-        }
+    // getter ...
+
+    public Excluder excluder() {
+        return excluder;
+    }
+    public FieldNamingStrategy fieldNamingStrategy() {
+        return fieldNamingStrategy;
+    }
+    public boolean serializeNulls() {
+        return serializeNulls;
+    }
+    public boolean htmlSafe() {
+        return htmlSafe;
     }
 
-    /**
-     * This method deserializes the Json read from the specified parse tree into an object of the
-     * specified type. It is not suitable to use if the specified class is a generic type since it
-     * will not have the generic type information because of the Type Erasure feature of Java.
-     * Therefore, this method should not be used if the desired type is a generic type. Note that
-     * this method works fine if the any of the fields of the specified object are generics, just the
-     * object itself should not be a generic type. For the cases when the object is of generic type,
-     * invoke {@link #fromJson(JsonElement, Type)}.
-     *
-     * @param <T>      the type of the desired object
-     * @param json     the root of the parse tree of {@link JsonElement}s from which the object is to
-     *                 be deserialized
-     * @param classOfT The class of T
-     * @return an object of type T from the json. Returns {@code null} if {@code json} is {@code null}
-     * or if {@code json} is empty.
-     * @throws JsonSyntaxException if json is not a valid representation for an object of type typeOfT
-     * @since 1.3
-     */
-    public <T> T fromJson(JsonElement json, Class<T> classOfT) throws JsonSyntaxException {
-        Object object = fromJson(json, (Type) classOfT);
-        return Primitives.wrap(classOfT).cast(object);
-    }
-
-    /**
-     * This method deserializes the Json read from the specified parse tree into an object of the
-     * specified type. This method is useful if the specified object is a generic type. For
-     * non-generic objects, use {@link #fromJson(JsonElement, Class)} instead.
-     *
-     * @param <T>     the type of the desired object
-     * @param json    the root of the parse tree of {@link JsonElement}s from which the object is to
-     *                be deserialized
-     * @param typeOfT The specific genericized type of src. You can obtain this type by using the
-     *                {@link com.google.gson.reflect.TypeToken} class. For example, to get the type for
-     *                {@code Collection<Foo>}, you should use:
-     *                <pre>
-     *                                              Type typeOfT = new TypeToken&lt;Collection&lt;Foo&gt;&gt;(){}.getType();
-     *                                              </pre>
-     * @return an object of type T from the json. Returns {@code null} if {@code json} is {@code null}
-     * or if {@code json} is empty.
-     * @throws JsonSyntaxException if json is not a valid representation for an object of type typeOfT
-     * @since 1.3
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T fromJson(JsonElement json, Type typeOfT) throws JsonSyntaxException {
-        if (json == null) {
-            return null;
-        }
-        return (T) fromJson(new JsonTreeReader(json), typeOfT);
+    @Override
+    public String toString() {
+        return new StringBuilder("{serializeNulls:")
+                .append(serializeNulls)
+                .append(",factories:").append(factories)
+                .append(",instanceCreators:").append(constructorConstructor)
+                .append("}")
+                .toString();
     }
 
     static class FutureTypeAdapter<T> extends TypeAdapter<T> {
@@ -1021,15 +1046,5 @@ public final class Gson {
             }
             delegate.write(out, value);
         }
-    }
-
-    @Override
-    public String toString() {
-        return new StringBuilder("{serializeNulls:")
-                .append(serializeNulls)
-                .append(",factories:").append(factories)
-                .append(",instanceCreators:").append(constructorConstructor)
-                .append("}")
-                .toString();
     }
 }

@@ -153,8 +153,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory BOOLEAN_FACTORY
-            = newFactory(boolean.class, Boolean.class, BOOLEAN);
+    public static final TypeAdapterFactory BOOLEAN_FACTORY = newFactory(boolean.class, Boolean.class, BOOLEAN);
 
     public static final TypeAdapter<Number> BYTE = new TypeAdapter<Number>() {
         @Override
@@ -177,8 +176,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory BYTE_FACTORY
-            = newFactory(byte.class, Byte.class, BYTE);
+    public static final TypeAdapterFactory BYTE_FACTORY = newFactory(byte.class, Byte.class, BYTE);
 
     public static final TypeAdapter<Number> SHORT = new TypeAdapter<Number>() {
         @Override
@@ -200,8 +198,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory SHORT_FACTORY
-            = newFactory(short.class, Short.class, SHORT);
+    public static final TypeAdapterFactory SHORT_FACTORY = newFactory(short.class, Short.class, SHORT);
 
     public static final TypeAdapter<Number> INTEGER = new TypeAdapter<Number>() {
         @Override
@@ -222,8 +219,7 @@ public final class TypeAdapters {
             out.value(value);
         }
     };
-    public static final TypeAdapterFactory INTEGER_FACTORY
-            = newFactory(int.class, Integer.class, INTEGER);
+    public static final TypeAdapterFactory INTEGER_FACTORY = newFactory(int.class, Integer.class, INTEGER);
 
     public static final TypeAdapter<AtomicInteger> ATOMIC_INTEGER = new TypeAdapter<AtomicInteger>() {
         @Override
@@ -240,8 +236,7 @@ public final class TypeAdapters {
             out.value(value.get());
         }
     }.nullSafe();
-    public static final TypeAdapterFactory ATOMIC_INTEGER_FACTORY =
-            newFactory(AtomicInteger.class, TypeAdapters.ATOMIC_INTEGER);
+    public static final TypeAdapterFactory ATOMIC_INTEGER_FACTORY = newFactory(AtomicInteger.class, TypeAdapters.ATOMIC_INTEGER);
 
     public static final TypeAdapter<AtomicBoolean> ATOMIC_BOOLEAN = new TypeAdapter<AtomicBoolean>() {
         @Override
@@ -254,8 +249,7 @@ public final class TypeAdapters {
             out.value(value.get());
         }
     }.nullSafe();
-    public static final TypeAdapterFactory ATOMIC_BOOLEAN_FACTORY =
-            newFactory(AtomicBoolean.class, TypeAdapters.ATOMIC_BOOLEAN);
+    public static final TypeAdapterFactory ATOMIC_BOOLEAN_FACTORY = newFactory(AtomicBoolean.class, TypeAdapters.ATOMIC_BOOLEAN);
 
     public static final TypeAdapter<AtomicIntegerArray> ATOMIC_INTEGER_ARRAY = new TypeAdapter<AtomicIntegerArray>() {
         @Override
@@ -288,8 +282,7 @@ public final class TypeAdapters {
             out.endArray();
         }
     }.nullSafe();
-    public static final TypeAdapterFactory ATOMIC_INTEGER_ARRAY_FACTORY =
-            newFactory(AtomicIntegerArray.class, TypeAdapters.ATOMIC_INTEGER_ARRAY);
+    public static final TypeAdapterFactory ATOMIC_INTEGER_ARRAY_FACTORY = newFactory(AtomicIntegerArray.class, TypeAdapters.ATOMIC_INTEGER_ARRAY);
 
     public static final TypeAdapter<Number> LONG = new TypeAdapter<Number>() {
         @Override
@@ -387,8 +380,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory CHARACTER_FACTORY
-            = newFactory(char.class, Character.class, CHARACTER);
+    public static final TypeAdapterFactory CHARACTER_FACTORY = newFactory(char.class, Character.class, CHARACTER);
 
     public static final TypeAdapter<String> STRING = new TypeAdapter<String>() {
         @Override
@@ -469,8 +461,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory STRING_BUILDER_FACTORY =
-            newFactory(StringBuilder.class, STRING_BUILDER);
+    public static final TypeAdapterFactory STRING_BUILDER_FACTORY = newFactory(StringBuilder.class, STRING_BUILDER);
 
     public static final TypeAdapter<StringBuffer> STRING_BUFFER = new TypeAdapter<StringBuffer>() {
         @Override
@@ -488,8 +479,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory STRING_BUFFER_FACTORY =
-            newFactory(StringBuffer.class, STRING_BUFFER);
+    public static final TypeAdapterFactory STRING_BUFFER_FACTORY = newFactory(StringBuffer.class, STRING_BUFFER);
 
     public static final TypeAdapter<URL> URL = new TypeAdapter<URL>() {
         @Override
@@ -550,8 +540,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory INET_ADDRESS_FACTORY =
-            newTypeHierarchyFactory(InetAddress.class, INET_ADDRESS);
+    public static final TypeAdapterFactory INET_ADDRESS_FACTORY = newTypeHierarchyFactory(InetAddress.class, INET_ADDRESS);
 
     public static final TypeAdapter<UUID> UUID = new TypeAdapter<UUID>() {
         @Override
@@ -673,8 +662,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory CALENDAR_FACTORY =
-            newFactoryForMultipleTypes(Calendar.class, GregorianCalendar.class, CALENDAR);
+    public static final TypeAdapterFactory CALENDAR_FACTORY = newFactoryForMultipleTypes(Calendar.class, GregorianCalendar.class, CALENDAR);
 
     public static final TypeAdapter<Locale> LOCALE = new TypeAdapter<Locale>() {
         @Override
@@ -788,8 +776,7 @@ public final class TypeAdapters {
         }
     };
 
-    public static final TypeAdapterFactory JSON_ELEMENT_FACTORY
-            = newTypeHierarchyFactory(JsonElement.class, JSON_ELEMENT);
+    public static final TypeAdapterFactory JSON_ELEMENT_FACTORY = newTypeHierarchyFactory(JsonElement.class, JSON_ELEMENT);
 
     private static final class EnumTypeAdapter<T extends Enum<T>> extends TypeAdapter<T> {
         private final Map<String, T> nameToConstant = new HashMap<String, T>();
@@ -838,14 +825,14 @@ public final class TypeAdapters {
                 return null;
             }
             if (!rawType.isEnum()) {
-                rawType = rawType.getSuperclass(); // handle anonymous subclasses
+                // handle anonymous subclasses
+                rawType = rawType.getSuperclass();
             }
             return (TypeAdapter<T>) new EnumTypeAdapter(rawType);
         }
     };
 
-    public static <TT> TypeAdapterFactory newFactory(
-            final TypeToken<TT> type, final TypeAdapter<TT> typeAdapter) {
+    public static <TT> TypeAdapterFactory newFactory(final TypeToken<TT> type, final TypeAdapter<TT> typeAdapter) {
         return new TypeAdapterFactory() {
             @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
             @Override
@@ -855,8 +842,7 @@ public final class TypeAdapters {
         };
     }
 
-    public static <TT> TypeAdapterFactory newFactory(
-            final Class<TT> type, final TypeAdapter<TT> typeAdapter) {
+    public static <TT> TypeAdapterFactory newFactory(final Class<TT> type, final TypeAdapter<TT> typeAdapter) {
         return new TypeAdapterFactory() {
             @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
             @Override
@@ -871,8 +857,7 @@ public final class TypeAdapters {
         };
     }
 
-    public static <TT> TypeAdapterFactory newFactory(
-            final Class<TT> unboxed, final Class<TT> boxed, final TypeAdapter<? super TT> typeAdapter) {
+    public static <TT> TypeAdapterFactory newFactory(final Class<TT> unboxed, final Class<TT> boxed, final TypeAdapter<? super TT> typeAdapter) {
         return new TypeAdapterFactory() {
             @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
             @Override
@@ -889,8 +874,7 @@ public final class TypeAdapters {
         };
     }
 
-    public static <TT> TypeAdapterFactory newFactoryForMultipleTypes(final Class<TT> base,
-                                                                     final Class<? extends TT> sub, final TypeAdapter<? super TT> typeAdapter) {
+    public static <TT> TypeAdapterFactory newFactoryForMultipleTypes(final Class<TT> base, final Class<? extends TT> sub, final TypeAdapter<? super TT> typeAdapter) {
         return new TypeAdapterFactory() {
             @SuppressWarnings("unchecked") // we use a runtime check to make sure the 'T's equal
             @Override
@@ -911,8 +895,7 @@ public final class TypeAdapters {
      * Returns a factory for all subtypes of {@code typeAdapter}. We do a runtime check to confirm
      * that the deserialized type matches the type requested.
      */
-    public static <T1> TypeAdapterFactory newTypeHierarchyFactory(
-            final Class<T1> clazz, final TypeAdapter<T1> typeAdapter) {
+    public static <T1> TypeAdapterFactory newTypeHierarchyFactory(final Class<T1> clazz, final TypeAdapter<T1> typeAdapter) {
         return new TypeAdapterFactory() {
             @SuppressWarnings("unchecked")
             @Override

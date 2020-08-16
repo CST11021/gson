@@ -116,8 +116,7 @@ import java.io.*;
 public abstract class TypeAdapter<T> {
 
     /**
-     * Writes one JSON value (an array, object, string, number, boolean or null)
-     * for {@code value}.
+     * 将{@code value}转为JSON值(an array, object, string, number, boolean or null)写入{@code out}
      *
      * @param value the Java object to write. May be null.
      */
@@ -125,11 +124,8 @@ public abstract class TypeAdapter<T> {
 
     /**
      * Converts {@code value} to a JSON document and writes it to {@code out}.
-     * Unlike Gson's similar {@link Gson#toJson(JsonElement, Appendable) toJson}
-     * method, this write is strict. Create a {@link
-     * JsonWriter#setLenient(boolean) lenient} {@code JsonWriter} and call
-     * {@link #write(com.google.gson.stream.JsonWriter, Object)} for lenient
-     * writing.
+     * Unlike Gson's similar {@link Gson#toJson(JsonElement, Appendable) toJson} method, this write is strict.
+     * Create a {@link JsonWriter#setLenient(boolean) lenient} {@code JsonWriter} and call {@link #write(com.google.gson.stream.JsonWriter, Object)} for lenient writing.
      *
      * @param value the Java object to convert. May be null.
      * @since 2.2
@@ -216,7 +212,8 @@ public abstract class TypeAdapter<T> {
         try {
             toJson(stringWriter, value);
         } catch (IOException e) {
-            throw new AssertionError(e); // No I/O writing to a StringWriter.
+            // No I/O writing to a StringWriter.
+            throw new AssertionError(e);
         }
         return stringWriter.toString();
     }

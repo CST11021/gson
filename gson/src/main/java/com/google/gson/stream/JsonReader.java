@@ -275,9 +275,7 @@ public class JsonReader implements Closeable {
      */
     private String peekedString;
 
-    /*
-     * The nesting stack. Using a manual array rather than an ArrayList saves 20%.
-     */
+    /** 嵌套堆栈。使用手动数组而不是ArrayList可节省20％ */
     private int[] stack = new int[32];
     private int stackSize = 0;
 
